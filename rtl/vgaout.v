@@ -14,9 +14,12 @@ module vgaout
 	input [15:0] elapsed,
 	input  [7:0] mark,
 
+	input        scandoubler,
+
 	output reg hs,
 	output reg vs,
 	output reg de,
+	output reg ce,
 	output reg [1:0] b,
 	output reg [1:0] r,
 	output reg [1:0] g
@@ -37,7 +40,7 @@ localparam VREZ3       = 12'd112;
 localparam VREZ1       = 12'd240;
 localparam VREZ2       = 12'd368;
 localparam VSCRN_END   = 12'd510;
-localparam VMAX        = 12'd525;
+localparam VMAX        = 12'd524;
 
 reg [11:0] hcount, vcount;
 reg hscr, vscr, nextline;
@@ -69,70 +72,74 @@ wire mpix = ({xr[2],xr[1]|xr[0]} <= 2) && ((vcount>>3) == (VREZ4>>3)) && r4[7];
 
 always @(posedge clk) begin
 
-	if (hcount==HMAX) hcount <= 9'd0;
-		else hcount <= hcount + 9'd1;
+	ce <= ~ce || scandoubler;
+	if(ce) begin
 
-	if (hcount==HSCRN_END) begin
-		hscr <= 1'b0;
-		de <= 0;
-	end else if (hcount==HSCRN_BEG) begin
-		hscr <= 1'b1;
-		de <= vscr;
-	end
+		if (hcount==HMAX) hcount <= 0;
+			else hcount <= hcount + 1'd1;
 
-	if (hcount==HSYNC_BEG) begin
-		nextline <= 1'b1;
-		hs <= 1'b0;                  // negative H-sync
-	end
-	else
-	begin
-		nextline <= 1'b0;
-		if (hcount==HSYNC_END)
-			hs <= 1'b1;
-	end
-
-	if (hcount==HREZ) begin
-		xr <= 6'd0;
-		r1 <= rez1;
-		r2 <= rez2;
-		r3 <= {elapsed, freq};
-		r4 <= mark;
-	end
-	else if ( (!hcount[2:0]) && (xr!=6'h3f) ) begin
-		xr <= xr + 6'd1;
-		if (xr[2:0]==3'd7) begin
-			r1[31:4] <= r1[27:0];
-			r2[31:4] <= r2[27:0];
-			r3[31:4] <= r3[27:0];
-			r4[7:1]  <= r4[6:0];
+		if (hcount==HSCRN_END) begin
+			hscr <= 0;
+			de <= 0;
+		end else if (hcount==HSCRN_BEG) begin
+			hscr <= 1;
+			de <= vscr;
 		end
-	end
 
-	if (nextline) begin
-		if (vcount==VMAX)
-			vcount <= 9'd0;
+		if (hcount==HSYNC_BEG) begin
+			nextline <= 1;
+			hs <= 0;                  // negative H-sync
+		end
 		else
-			vcount <= vcount + 9'd1;
+		begin
+			nextline <= 0;
+			if (hcount==HSYNC_END)
+				hs <= 1;
+		end
 
-		if (vcount==VSCRN_END)
-			vscr <= 1'b0;
-		else if (vcount==VSCRN_BEG)
-			vscr <= 1'b1;
+		if (hcount==HREZ) begin
+			xr <= 0;
+			r1 <= rez1;
+			r2 <= rez2;
+			r3 <= {elapsed, freq};
+			r4 <= mark;
+		end
+		else if ( (!hcount[2:0]) && (xr!=6'h3f) ) begin
+			xr <= xr + 1'd1;
+			if (xr[2:0]==3'd7) begin
+				r1[31:4] <= r1[27:0];
+				r2[31:4] <= r2[27:0];
+				r3[31:4] <= r3[27:0];
+				r4[7:1]  <= r4[6:0];
+			end
+		end
 
-		if (vcount==VSYNC_BEG)
-			vs <= 1'b1;                 // positive V-sync
-		else if (vcount==VSYNC_END)
-			vs <= 1'b0;
+		if (nextline) begin
+			if (vcount >= VMAX)
+				vcount <= 0;
+			else
+				vcount <= vcount + (scandoubler ? 2'd1 : 2'd2);
 
-		if ( (vcount==VREZ1) || (vcount==VREZ2) || (vcount==VREZ3))
-			yr <= 4'd0;
-		else if ( (vcount[2:0]==3'b000) && (yr!=4'hf) )
-			yr <= yr + 4'd1;
+			if (vcount==VSCRN_END)
+				vscr <= 0;
+			else if (vcount==VSCRN_BEG)
+				vscr <= 1;
+
+			if (vcount==VSYNC_BEG)
+				vs <= 1;                 // positive V-sync
+			else if (vcount==VSYNC_END)
+				vs <= 0;
+
+			if ( (vcount==VREZ1) || (vcount==VREZ2) || (vcount==VREZ3))
+				yr <= 0;
+			else if ( (vcount[2:0]==3'b000) && (yr!=4'hf) )
+				yr <= yr + 1'd1;
+
+		end
+
+		{g,r,b} <= pix ? pixcolor : (hscr&vscr) ? bg : 6'b000000;
 
 	end
-
-	{g,r,b} <= pix ? pixcolor : (hscr&vscr) ? bg : 6'b000000;
-
 end
 
 endmodule

@@ -67,6 +67,7 @@ reg  [10:0] ps2_key;
 wire [15:0] joystick_0;
 wire  [1:0] sdram_sz;
 reg   [1:0] sdram_chip = 2'h0;
+wire        scandoubler;
 
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
@@ -76,6 +77,8 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.status(status),
 	.buttons(buttons),
 	.sdram_sz(sdram_sz),
+	
+	.forced_scandoubler(scandoubler),
 
 	.joystick_0(joystick_0),
 	.ps2_key(ps2_key),
@@ -386,13 +389,12 @@ vpll vpll
 );
 
 assign CLK_VIDEO = videoclk;
-assign CE_PIXEL  = 1;
 
-wire hs, vs;
 wire [1:0] b, r, g;
 vgaout showrez
 (
 	.clk(videoclk),
+	.scandoubler(scandoubler),
 	.rez1({sdram_sz, passcount[27:0]}),
 	.rez2(failcount),
 	.rez3((sdram_sz == 3) ? ~sdram_chip : 2'b00),
@@ -400,16 +402,14 @@ vgaout showrez
 	.freq(16'hF000 | cfg_param[{pos, 2'd0}][11:0]),
 	.elapsed(mins),
 	.mark(8'h80 >> {~auto, secs[2:0]}),
-	.hs(hs),
-	.vs(vs),
+	.ce(CE_PIXEL),
+	.hs(VGA_HS),
+	.vs(VGA_VS),
 	.de(VGA_DE),
 	.b(b),
 	.r(r),
 	.g(g)
 );
-
-assign VGA_HS = ~hs;
-assign VGA_VS = ~vs;
 
 assign VGA_B  = {4{b}};
 assign VGA_R  = {4{r}};
